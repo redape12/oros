@@ -1,0 +1,104 @@
+WITH port_groups AS (
+    -- Группы портов для суммирования
+    SELECT 
+        itemid,
+        portname,
+        table_name,
+        type,
+        group_id
+    FROM (
+        -- Одиночные порты
+        VALUES 
+        (138399, 'Вымпелком', 'Стык с Билайн в ЕКБ 8 марта 37', 'Входящий', 1),
+        (138492, 'Вымпелком', 'Стык с Билайн в ЕКБ 8 марта 37', 'Исходящий', 2),
+        (136796, 'Sibir IX Data IX', 'Sibir IX Data IX', 'Входящий', 3),
+        (136820, 'Sibir IX Data IX', 'Sibir IX Data IX', 'Исходящий', 4),
+        (72686, 'Милеком пиринг Рубцовск', 'Стык с Милеком в ЕКБ для DATA-IX SIBIR-IX Кемерово Рубцовск', 'Входящий', 5),
+        (72690, 'Милеком пиринг Рубцовск', 'Стык с Милеком в ЕКБ для DATA-IX SIBIR-IX Кемерово Рубцовск', 'Исходящий', 6),
+        (72967, 'Мегафон пиринг Рубцовск', 'Стык с Милеком (пиринг, FV, Рубцовск) Uplinks->Uplinks RUB-> vlanif2254 Peering Milecom', 'Входящий', 7),
+        (72968, 'Мегафон пиринг Рубцовск', 'Стык с Милеком (пиринг, FV, Рубцовск) Uplinks->Uplinks RUB-> vlanif2254 Peering Milecom', 'Исходящий', 8),
+        (234387, 'ОККО', 'Стык с ОККО Шейнкмана,10', 'Входящий', 9),
+        (234389, 'ОККО', 'Стык с ОККО Шейнкмана,10', 'Исходящий', 10),
+        (234428, 'Вконтакте', 'Стык с Вконтакте сиб.трафкт 8г', 'Входящий', 11),
+        (234432, 'Вконтакте', 'Стык с Вконтакте сиб.трафкт 8г', 'Исходящий', 12),
+        (151666, 'Иви', 'В старой графане "К-телеком пирирнг в ЕКБ + ivi" Uplinks->Uplinks->Стык с К-Телеком(пиринг+IVI)(10.66.66.82)', 'Входящий', 13),
+        (151670, 'Иви', 'В старой графане "К-телеком пирирнг в ЕКБ + ivi" Uplinks->Uplinks->Стык с К-Телеком(пиринг+IVI)(10.66.66.82)', 'Исходящий', 14),
+        (234436, 'RuTube', 'Стык с Rutube Сиб тракт 8г', 'Входящий', 15),
+        (234438, 'RuTube', 'Стык с Rutube Сиб тракт 8г', 'Исходящий', 16),
+        (201422, 'Смотрешка', 'Стык с Смотрешкой МС 145', 'Входящий', 17),
+        (201423, 'Смотрешка', 'Стык с Смотрешкой МС 145', 'Исходящий', 18),
+        -- Комбинированные порты (одинаковый group_id для суммирования)
+        (163147, 'УралВэс МС 145', 'Стык с Эр-Телеком в ЕКБ МС 145 + Стык с ЭР-Телеком в ЕКБ 8 марта 37', 'Входящий', 19),
+        (209451, 'УралВэс МС 145', 'Стык с Эр-Телеком в ЕКБ МС 145 + Стык с ЭР-Телеком в ЕКБ 8 марта 37', 'Входящий', 19),
+        (163148, 'УралВэс МС 145', 'Стык с Эр-Телеком в ЕКБ МС 145 + Стык с ЭР-Телеком в ЕКБ 8 марта 37', 'Исходящий', 20),
+        (209457, 'УралВэс МС 145', 'Стык с Эр-Телеком в ЕКБ МС 145 + Стык с ЭР-Телеком в ЕКБ 8 марта 37', 'Исходящий', 20),
+        (163140, 'ТТК', 'Стык с ТТК в ЕКБ МС145 + Стык с ТТК в ЕКБ 8 марта 37', 'Входящий', 21),
+        (137421, 'ТТК', 'Стык с ТТК в ЕКБ МС145 + Стык с ТТК в ЕКБ 8 марта 37', 'Входящий', 21),
+        (163143, 'ТТК', 'Стык с ТТК в ЕКБ МС145 + Стык с ТТК в ЕКБ 8 марта 37', 'Исходящий', 22),
+        (137429, 'ТТК', 'Стык с ТТК в ЕКБ МС145 + Стык с ТТК в ЕКБ 8 марта 37', 'Исходящий', 22)
+    ) as t(itemid, portname, table_name, type, group_id)
+),
+traffic_data AS (
+    SELECT 
+        pg.portname,
+        pg.table_name,
+        pg.type,
+        pg.group_id,
+        h.clock,
+        SUM(h.value / 1000000) as total_mbps,
+        SUM(h.value) as total_bytes,
+        COUNT(DISTINCT pg.itemid) as ports_count,
+        -- Добавляем вычисляемые столбцы для месяца и года
+        TO_CHAR(to_timestamp(h.clock), 'Month') as month,
+        TO_CHAR(to_timestamp(h.clock), 'MM') as month_num,
+        EXTRACT(YEAR FROM to_timestamp(h.clock)) as year
+    FROM port_groups pg
+    LEFT JOIN public.history_uint h ON pg.itemid = h.itemid
+        AND h.clock >= EXTRACT(EPOCH FROM TIMESTAMP '2026-01-01 00:00:00')::integer
+        AND h.clock < EXTRACT(EPOCH FROM TIMESTAMP '2026-02-01 00:00:00')::integer
+        AND h.value > 0
+    GROUP BY pg.portname, pg.table_name, pg.type, pg.group_id, h.clock
+)
+SELECT
+    portname,
+    table_name,
+    type,
+    month,
+    month_num,
+    year,
+    CASE 
+        WHEN MAX(ports_count) > 1 THEN CONCAT('Комбинированный (', MAX(ports_count), ' порта)')
+        ELSE 'Одиночный порт'
+    END as port_type,
+    COUNT(*) as measurements_count,
+    ROUND(AVG(total_mbps)::numeric, 2) as avg_mbps,
+    ROUND(PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY total_mbps)::numeric, 2) as median_mbps,
+    ROUND(MAX(total_mbps)::numeric, 2) as max_mbps,
+    ROUND(MIN(total_mbps)::numeric, 2) as min_mbps,
+    PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY total_mbps) as p95_mbps,
+    MIN(to_timestamp(clock)) as first_measurement,
+    MAX(to_timestamp(clock)) as last_measurement
+FROM traffic_data
+WHERE clock IS NOT NULL
+GROUP BY portname, table_name, type, group_id, month, month_num, year
+ORDER BY 
+    year,
+    month_num::integer,
+    CASE portname 
+        WHEN 'Вымпелком' THEN 1
+        WHEN 'Sibir IX Data IX' THEN 2
+        WHEN 'Милеком пиринг Рубцовск' THEN 3
+        WHEN 'Мегафон пиринг Рубцовск' THEN 4
+        WHEN 'ОККО' THEN 5
+        WHEN 'Вконтакте' THEN 6
+        WHEN 'Иви' THEN 7
+        WHEN 'RuTube' THEN 8
+        WHEN 'Смотрешка' THEN 9
+        WHEN 'УралВэс МС 145' THEN 10
+        WHEN 'ТТК' THEN 11
+        ELSE 12
+    END,
+    CASE type 
+        WHEN 'Входящий' THEN 1 
+        ELSE 2 
+    END;
